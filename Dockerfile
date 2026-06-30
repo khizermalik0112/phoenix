@@ -1,29 +1,36 @@
-# Stage 1: Build frontend
-FROM node:20-alpine AS build
+# Stage 1
+FROM node:18-alpine AS builder
 
 WORKDIR /app
 
 COPY package*.json ./
 
-RUN npm install
+RUN npm install --no-audit --no-fund
 
 COPY . .
 
 RUN npm run build
-
-# Stage 2: Production
-FROM node:20-alpine
+ 
+RUN npm prune --production && npm cache clean --force
+ 
+# Stage 2: PRODUCTION
+FROM alpine:3.19
 
 WORKDIR /app
 
-COPY package*.json ./
+RUN apk add --no-cache nodejs
 
-RUN npm install --omit=dev && npm cache clean --force
+RUN addgroup -S node && adduser -S node -G node
 
-COPY --from=build /app/dist ./dist
+COPY --from=builder /app/node_modules ./node_modules
+COPY --from=builder /app/index.js ./index.js
+COPY --from=builder /app/dist ./dist
 
-COPY index.js ./
-
+ENV NODE_ENV=production
 EXPOSE 5000
 
-CMD ["npm", "start"]
+RUN chown -R node:node /app
+
+USER node
+
+CMD ["node", "index.js"]
